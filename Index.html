@@ -1,0 +1,102 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>大自然走讀｜同行小教室</title><style>
+:root{font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;background:#f5f4ee;color:#203d30}*{box-sizing:border-box}body{margin:0}header{padding:42px 20px;background:linear-gradient(125deg,#214b39,#64836d);color:white}header>div,main{max-width:830px;margin:auto}header small{letter-spacing:.18em}h1{font-size:clamp(30px,6vw,42px);margin:12px 0}header p{line-height:1.8}main{padding:22px 16px 70px}h2{font-size:22px}.box,.card{background:white;border:1px solid #dde5da;border-radius:16px;padding:20px;margin:16px 0;box-shadow:0 3px 15px #1536220a}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{margin:0}.card h3{margin:8px 0}.muted{color:#64796a;font-size:14px;line-height:1.7}.pill{display:inline-block;border-radius:20px;padding:4px 10px;background:#eaf2e8;color:#355a42;font-size:12px}label{display:block;font-weight:600;margin:16px 0 7px}input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid #bccfc0;border-radius:10px;background:white;color:#203d30}textarea{min-height:200px;line-height:1.9;resize:vertical}button{font:inherit;font-weight:650;padding:11px 16px;background:#275d42;color:white;border:0;border-radius:10px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#e8efe9;color:#24563e}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:15px}.hide{display:none!important}.status{min-height:24px;line-height:1.7;color:#355a42}.error{color:#a33b32}.entry{border-top:1px solid #e4e9e1;padding:15px 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}.entry small{display:block;color:#6c7d6f;margin-bottom:7px}.top{display:flex;justify-content:space-between;gap:10px;align-items:center}.top button{flex-shrink:0}.hint{background:#fdf6e5;padding:12px;border-radius:10px;font-size:14px;line-height:1.7}@media(max-width:580px){.cards{grid-template-columns:1fr}.top{align-items:start}}
+</style></head><body><header><div><small>生命之歌 · 2026 秋季</small><h1>大自然走讀<br>同行小教室</h1><p>讓每一次走進自然的感受，<br>成為日後回望自己生命的線索。</p></div></header><main>
+<div id="setup" class="box hide"><h2>網站尚未完成設定</h2><p>管理者需要先填入 Supabase Project URL 與公開金鑰。請勿在此填入資料庫密碼或 service_role 金鑰。</p></div>
+<section id="login" class="box"><h2>同行者登入</h2><p class="muted">使用電子郵件收取登入連結。只有登入者本人能查看自己的書寫。</p><label for="email">電子郵件</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com"><div class="actions"><button id="googleLogin" type="button">使用 Google 帳號登入</button><button id="send">寄送登入連結</button></div><p id="loginStatus" class="status" role="status"></p><p class="hint">請使用自己能收信的信箱。若收不到信，請檢查垃圾郵件匣。</p></section>
+<section id="app" class="hide"><div class="box top"><div><strong>已登入</strong><div class="muted" id="account"></div></div><button class="secondary" id="logout">登出</button></div><h2>這一季的四段旅程</h2><div class="cards" id="cards"></div>
+<div class="box" id="editor"><h2>走讀後的書寫</h2><p class="muted">第一、第二場可補寫。每次送出都會留下獨立紀錄；原始內容不提供覆寫功能。</p><label for="session">選擇走讀場次</label><select id="session"><option value="earth">第一場｜地元素</option><option value="water">第二場｜水元素</option></select><label for="reflection">此刻，我想為自己留下什麼？</label><textarea id="reflection" maxlength="20000" placeholder="我記得那一天……&#10;現在回頭看，我發現……"></textarea><div class="actions"><button id="save">確認送出並保存</button><button class="secondary" id="clear">清除輸入</button></div><p id="saveStatus" class="status" role="status"></p></div>
+<div class="box"><div class="top"><h2>我的書寫歷程</h2><button id="refresh" class="secondary">重新整理</button></div><p class="muted">僅顯示你自己的紀錄；新心得可再次送出，不覆蓋舊內容。</p><div id="entries"></div></div>
+<div class="box hide" id="admin"><h2>管理者｜同行者書寫</h2><p class="muted">依走讀場次分類，再依同行者集中顯示；每位同行者的書寫依時間由舊到新排列。</p><label for="adminSession">查看場次</label><select id="adminSession"><option value="all">全部場次</option><option value="earth">第一場｜地元素</option><option value="water">第二場｜水元素</option><option value="fire">第三場｜火元素</option><option value="air">第四場｜風元素</option></select><div class="actions"><button id="adminRefresh">更新管理者紀錄</button></div><p id="adminStatus" class="status"></p><div id="adminEntries"></div></div>
+</section><footer class="muted">生命之歌 · 大自然走讀｜同行小教室</footer></main>
+<script src="config.js"></script><script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const $=id=>document.getElementById(id);const cfg=window.WALK_CONFIG||{};const valid=cfg.url?.startsWith('https://')&&cfg.anonKey&&!cfg.anonKey.includes('REPLACE');let db=null,user=null,sessionIds={};const setStatus=(id,message,error=false)=>{const el=$(id);el.textContent=message;el.classList.toggle('error',error)};
+if(!valid){$('setup').classList.remove('hide');$('login').classList.add('hide')}else{db=createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});db.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>syncUser(session?.user||null))});db.auth.getSession().then(({data:{session}})=>syncUser(session?.user||null)).catch(e=>console.error(e))}
+async function syncUser(next){user=next;$('login').classList.toggle('hide',!!user);$('app').classList.toggle('hide',!user);if(!user)return;$('account').textContent=user.email||'已登入';await loadSessionIds();await Promise.all([loadEntries(),loadAdmin()])}
+$('googleLogin').onclick=async()=>{const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});if(error)alert('Google 登入失敗：'+error.message)};$('send').onclick=async()=>{const email=$('email').value.trim();if(!email){setStatus('loginStatus','請輸入電子郵件。',true);return}$('send').disabled=true;setStatus('loginStatus','正在寄送登入連結……');try{const {error}=await db.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});if(error)throw error;setStatus('loginStatus','若信箱可用，登入連結將寄至你的電子郵件。請開啟信件完成登入。')}catch(e){setStatus('loginStatus',e.message,true)}finally{$('send').disabled=false}};
+$('logout').onclick=async()=>{const btn=$('logout');btn.disabled=true;btn.textContent='登出中…';try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;await syncUser(null);location.replace(location.origin+location.pathname)}catch(e){alert('登出失敗：'+(e?.message||String(e)));btn.disabled=false;btn.textContent='登出'}};;const sessions=[['earth','第一場｜地元素','穩定・承接・與大地連結',true],['water','第二場｜水元素','感受・流動・內在覺察',true],['fire','第三場｜火元素','轉化・行動・生命能量',false],['air','第四場｜風元素','呼吸・整合・秋季收尾',false]];
+for(const [code,name,desc,open] of sessions){const el=document.createElement('article');el.className='card';const h=document.createElement('h3');h.textContent=name;const p=document.createElement('p');p.className='muted';p.textContent=desc;const tag=document.createElement('span');tag.className='pill';tag.textContent=open?'開放補寫':'預留入口';const b=document.createElement('button');b.style.display='block';b.style.marginTop='14px';b.textContent=open?'開始書寫':'尚未開放';b.disabled=!open;b.onclick=()=>{$('session').value=code;$('editor').scrollIntoView({behavior:'smooth'});$('reflection').focus()};el.append(h,p,tag,b);$('cards').append(el)}
+$('clear').onclick=()=>{$('reflection').value='';setStatus('saveStatus','已清除尚未送出的內容。')};
+async function loadSessionIds(){
+  sessionIds={};
+  const {data:course,error:courseError}=await db.from('walk_courses').select('id').eq('code','2026-autumn').single();
+  if(courseError||!course){setStatus('saveStatus','無法取得 2026 秋季資料：'+(courseError?.message||'找不到季別'),true);return}
+  const {data,error}=await db.from('walk_sessions').select('id,element,course_id').eq('course_id',course.id).order('id');
+  if(error){setStatus('saveStatus','無法取得場次：'+error.message,true);return}
+  for(const item of data||[]){const key=String(item.element||'').trim().toLowerCase();
+    if(['earth','地'].includes(key))sessionIds.earth=item.id;
+    if(['water','水'].includes(key))sessionIds.water=item.id;
+    if(['fire','火'].includes(key))sessionIds.fire=item.id;
+    if(['air','wind','風'].includes(key))sessionIds.air=item.id;
+  }
+  if(!sessionIds.earth||!sessionIds.water)setStatus('saveStatus','找不到本季地／水元素場次，請先核對資料庫場次代碼。',true);else setStatus('saveStatus','');
+}
+$('save').onclick=async()=>{if(!user)return;const content=$('reflection').value.trim();if(!content){setStatus('saveStatus','請先填寫內容。',true);return}if(!confirm('確定送出這篇書寫嗎？送出後不能修改或刪除原始內容。'))return;$('save').disabled=true;setStatus('saveStatus','正在保存……');try{const session_id=sessionIds[$('session').value];if(!session_id)throw new Error('場次尚未完成設定');const {error}=await db.from('walk_reflections').insert({author_id:user.id,session_id,content});if(error)throw error;$('reflection').value='';setStatus('saveStatus','已成功保存。');await loadEntries()}catch(e){setStatus('saveStatus','保存失敗：'+e.message,true)}finally{$('save').disabled=false}};
+function render(container,items,showOwner=false){container.replaceChildren();if(!items?.length){const p=document.createElement('p');p.className='muted';p.textContent='目前沒有紀錄。';container.append(p);return}for(const item of items){const div=document.createElement('div');div.className='entry';const small=document.createElement('small');const title=sessions.find(x=>sessionIds[x[0]]===item.session_id)?.[1]||('場次 '+item.session_id);small.textContent=`${title} · ${new Date(item.created_at).toLocaleString('zh-TW')}${showOwner?' · '+item.author_id:''}`;const body=document.createElement('div');body.textContent=item.content;div.append(small,body);container.append(div)}}
+async function loadEntries(){if(!user)return;const {data,error}=await db.from('walk_reflections').select('id,session_id,content,created_at').eq('author_id',user.id).order('created_at',{ascending:false}).limit(100);if(error){$('entries').textContent='無法載入紀錄：'+error.message;return}render($('entries'),data)}$('refresh').onclick=loadEntries;
+async function loadAdmin(){if(!user)return;const {data:isAdmin,error:roleErr}=await db.rpc('is_walk_admin');if(roleErr||!isAdmin){$('admin').classList.add('hide');return}$('admin').classList.remove('hide');await loadAdminEntries()}
+let adminRecords=[];
+let participantNames=new Map();
+function renderAdminGrouped(){
+ const root=$('adminEntries');root.replaceChildren();
+ const chosen=$('adminSession').value;
+ const groups=new Map();
+ for(const item of adminRecords){
+   const code=sessions.find(x=>sessionIds[x[0]]!=null&&String(sessionIds[x[0]])===String(item.session_id))?.[0]||'other:'+item.session_id;
+   if(chosen!=='all'&&code!==chosen)continue;
+   if(!groups.has(code))groups.set(code,new Map());
+   const people=groups.get(code);
+   if(!people.has(item.author_id))people.set(item.author_id,[]);
+   people.get(item.author_id).push(item);
+ }
+ let shown=0;
+ const order=[...sessions.map(x=>x[0]),...groups.keys()].filter((v,i,a)=>a.indexOf(v)===i);
+ for(const code of order){
+   const people=groups.get(code);if(!people)continue;
+   const heading=document.createElement('h3');
+   const name=sessions.find(x=>x[0]===code)?.[1]||'其他場次';
+   const count=[...people.values()].reduce((sum,items)=>sum+items.length,0);shown+=count;
+   heading.textContent=name+'（'+count+' 筆）';root.append(heading);
+   let number=0;
+   for(const [author,items] of people){
+     const details=document.createElement('details');details.className='box';details.open=true;details.style.margin='10px 0';
+     const summary=document.createElement('summary');summary.style.cursor='pointer';summary.style.fontWeight='650';number++;const displayName=participantNames.get(author);summary.textContent=(displayName||'同行者 '+number)+'（'+items.length+' 筆）';details.append(summary);
+     const identity=document.createElement('p');identity.className='muted';identity.textContent=displayName?'同行者姓名已對應':'尚未設定姓名';details.append(identity);
+     const nameRow=document.createElement('div');nameRow.className='actions';nameRow.style.alignItems='center';
+     const nameInput=document.createElement('input');nameInput.type='text';nameInput.maxLength=60;nameInput.placeholder='設定同行者姓名';nameInput.value=displayName||'';nameInput.setAttribute('aria-label','同行者姓名');nameInput.style.flex='1';nameInput.style.minWidth='140px';
+     const nameSave=document.createElement('button');nameSave.type='button';nameSave.textContent='儲存姓名';
+     const nameStatus=document.createElement('span');nameStatus.className='muted';nameStatus.setAttribute('role','status');
+     nameSave.onclick=async()=>{const value=nameInput.value.trim();if(!value){nameStatus.textContent='請輸入姓名';return}nameSave.disabled=true;nameStatus.textContent='儲存中…';try{
+       const {data:existing,error:lookupError}=await db.from('participants').select('primary_group').eq('id',author).maybeSingle();if(lookupError)throw lookupError;
+       const record={id:author,display_name:value,primary_group:existing?.primary_group||'weekend'};
+       const {error}=await db.from('participants').upsert(record,{onConflict:'id'});if(error)throw error;
+       participantNames.set(author,value);renderAdminGrouped();
+     }catch(e){nameStatus.textContent='儲存失敗：'+e.message}finally{nameSave.disabled=false}};
+     nameRow.append(nameInput,nameSave,nameStatus);details.append(nameRow);
+     items.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+     for(const item of items){
+       const entry=document.createElement('div');entry.className='entry';
+       const date=document.createElement('small');date.textContent=new Date(item.created_at).toLocaleString('zh-TW');
+       const body=document.createElement('div');body.textContent=item.content;
+       entry.append(date,body);details.append(entry);
+     }
+     root.append(details);
+   }
+ }
+ if(!shown){const p=document.createElement('p');p.className='muted';p.textContent='目前沒有這個場次的書寫紀錄。';root.append(p)}
+ setStatus('adminStatus','目前顯示 '+shown+' 筆（已載入 '+adminRecords.length+' 筆，最多 200 筆）。');
+}
+async function loadAdminEntries(){
+ setStatus('adminStatus','正在讀取……');
+ const {data,error}=await db.from('walk_reflections').select('id,author_id,session_id,content,created_at').order('created_at',{ascending:false}).limit(200);
+ if(error){setStatus('adminStatus',error.message,true);return}
+ adminRecords=data||[];
+ participantNames=new Map();
+ const {data:profiles,error:profileError}=await db.from('participants').select('id,display_name').limit(1000);
+ if(!profileError){for(const profile of profiles||[]){const name=String(profile.display_name||'').trim();if(name)participantNames.set(profile.id,name)}}
+ renderAdminGrouped();
+ if(profileError)setStatus('adminStatus','書寫已載入，但姓名資料暫時無法讀取：'+profileError.message,true);
+}
+$('adminSession').onchange=renderAdminGrouped;
+$('adminRefresh').onclick=loadAdminEntries;
+</script></body></html>
