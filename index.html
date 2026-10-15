@@ -6,13 +6,13 @@
 <section id="app" class="hide"><div class="box top"><div><strong>已登入</strong><div class="muted" id="account"></div></div><button class="secondary" id="logout">登出</button></div><h2>這一季的四段旅程</h2><div class="cards" id="cards"></div>
 <div class="box" id="editor"><h2>走讀後的書寫</h2><p class="muted">第一、第二場可補寫。每次送出都會留下獨立紀錄；原始內容不提供覆寫功能。</p><label for="session">選擇走讀場次</label><select id="session"><option value="earth">第一場｜地元素</option><option value="water">第二場｜水元素</option></select><label for="reflection">此刻，我想為自己留下什麼？</label><textarea id="reflection" maxlength="20000" placeholder="我記得那一天……&#10;現在回頭看，我發現……"></textarea><div class="actions"><button id="save">確認送出並保存</button><button class="secondary" id="clear">清除輸入</button></div><p id="saveStatus" class="status" role="status"></p></div>
 <div class="box"><div class="top"><h2>我的書寫歷程</h2><button id="refresh" class="secondary">重新整理</button></div><p class="muted">僅顯示你自己的紀錄；新心得可再次送出，不覆蓋舊內容。</p><div id="entries"></div></div>
-<div class="box hide" id="admin"><h2>管理者｜同行者書寫</h2><p class="muted">僅授權管理者可查看所有書寫。</p><button id="adminRefresh">更新管理者紀錄</button><p id="adminStatus" class="status"></p><div id="adminEntries"></div></div>
+<div class="box hide" id="admin"><h2>管理者｜同行者書寫</h2><p class="muted">依走讀場次分類，再依同行者集中顯示；每位同行者的書寫依時間由舊到新排列。</p><label for="adminSession">查看場次</label><select id="adminSession"><option value="all">全部場次</option><option value="earth">第一場｜地元素</option><option value="water">第二場｜水元素</option><option value="fire">第三場｜火元素</option><option value="air">第四場｜風元素</option></select><div class="actions"><button id="adminRefresh">更新管理者紀錄</button></div><p id="adminStatus" class="status"></p><div id="adminEntries"></div></div>
 </section><footer class="muted">生命之歌 · 大自然走讀｜同行小教室</footer></main>
 <script src="config.js"></script><script type="module">
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const $=id=>document.getElementById(id);const cfg=window.WALK_CONFIG||{};const valid=cfg.url?.startsWith('https://')&&cfg.anonKey&&!cfg.anonKey.includes('REPLACE');let db=null,user=null,sessionIds={};const setStatus=(id,message,error=false)=>{const el=$(id);el.textContent=message;el.classList.toggle('error',error)};
 if(!valid){$('setup').classList.remove('hide');$('login').classList.add('hide')}else{db=createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});db.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>syncUser(session?.user||null))});db.auth.getSession().then(({data:{session}})=>syncUser(session?.user||null)).catch(e=>console.error(e))}
-async function syncUser(next){user=next;$('login').classList.toggle('hide',!!user);$('app').classList.toggle('hide',!user);if(!user)return;$('account').textContent=user.email||'已登入';await Promise.all([loadSessionIds(),loadEntries(),loadAdmin()])}
+async function syncUser(next){user=next;$('login').classList.toggle('hide',!!user);$('app').classList.toggle('hide',!user);if(!user)return;$('account').textContent=user.email||'已登入';await loadSessionIds();await Promise.all([loadEntries(),loadAdmin()])}
 $('googleLogin').onclick=async()=>{const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});if(error)alert('Google 登入失敗：'+error.message)};$('send').onclick=async()=>{const email=$('email').value.trim();if(!email){setStatus('loginStatus','請輸入電子郵件。',true);return}$('send').disabled=true;setStatus('loginStatus','正在寄送登入連結……');try{const {error}=await db.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});if(error)throw error;setStatus('loginStatus','若信箱可用，登入連結將寄至你的電子郵件。請開啟信件完成登入。')}catch(e){setStatus('loginStatus',e.message,true)}finally{$('send').disabled=false}};
 $('logout').onclick=async()=>{const btn=$('logout');btn.disabled=true;btn.textContent='登出中…';try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;await syncUser(null);location.replace(location.origin+location.pathname)}catch(e){alert('登出失敗：'+(e?.message||String(e)));btn.disabled=false;btn.textContent='登出'}};;const sessions=[['earth','第一場｜地元素','穩定・承接・與大地連結',true],['water','第二場｜水元素','感受・流動・內在覺察',true],['fire','第三場｜火元素','轉化・行動・生命能量',false],['air','第四場｜風元素','呼吸・整合・秋季收尾',false]];
 for(const [code,name,desc,open] of sessions){const el=document.createElement('article');el.className='card';const h=document.createElement('h3');h.textContent=name;const p=document.createElement('p');p.className='muted';p.textContent=desc;const tag=document.createElement('span');tag.className='pill';tag.textContent=open?'開放補寫':'預留入口';const b=document.createElement('button');b.style.display='block';b.style.marginTop='14px';b.textContent=open?'開始書寫':'尚未開放';b.disabled=!open;b.onclick=()=>{$('session').value=code;$('editor').scrollIntoView({behavior:'smooth'});$('reflection').focus()};el.append(h,p,tag,b);$('cards').append(el)}
@@ -26,6 +26,8 @@ async function loadSessionIds(){
   for(const item of data||[]){const key=String(item.element||'').trim().toLowerCase();
     if(['earth','地'].includes(key))sessionIds.earth=item.id;
     if(['water','水'].includes(key))sessionIds.water=item.id;
+    if(['fire','火'].includes(key))sessionIds.fire=item.id;
+    if(['air','wind','風'].includes(key))sessionIds.air=item.id;
   }
   if(!sessionIds.earth||!sessionIds.water)setStatus('saveStatus','找不到本季地／水元素場次，請先核對資料庫場次代碼。',true);else setStatus('saveStatus','');
 }
@@ -33,5 +35,51 @@ $('save').onclick=async()=>{if(!user)return;const content=$('reflection').value.
 function render(container,items,showOwner=false){container.replaceChildren();if(!items?.length){const p=document.createElement('p');p.className='muted';p.textContent='目前沒有紀錄。';container.append(p);return}for(const item of items){const div=document.createElement('div');div.className='entry';const small=document.createElement('small');const title=sessions.find(x=>sessionIds[x[0]]===item.session_id)?.[1]||('場次 '+item.session_id);small.textContent=`${title} · ${new Date(item.created_at).toLocaleString('zh-TW')}${showOwner?' · '+item.author_id:''}`;const body=document.createElement('div');body.textContent=item.content;div.append(small,body);container.append(div)}}
 async function loadEntries(){if(!user)return;const {data,error}=await db.from('walk_reflections').select('id,session_id,content,created_at').eq('author_id',user.id).order('created_at',{ascending:false}).limit(100);if(error){$('entries').textContent='無法載入紀錄：'+error.message;return}render($('entries'),data)}$('refresh').onclick=loadEntries;
 async function loadAdmin(){if(!user)return;const {data:isAdmin,error:roleErr}=await db.rpc('is_walk_admin');if(roleErr||!isAdmin){$('admin').classList.add('hide');return}$('admin').classList.remove('hide');await loadAdminEntries()}
-async function loadAdminEntries(){setStatus('adminStatus','正在讀取……');const {data,error}=await db.from('walk_reflections').select('id,author_id,session_id,content,created_at').order('created_at',{ascending:false}).limit(200);if(error){setStatus('adminStatus',error.message,true);return}setStatus('adminStatus',`目前顯示 ${data.length} 筆（最多 200 筆）。`);render($('adminEntries'),data,true)}$('adminRefresh').onclick=loadAdminEntries;
+let adminRecords=[];
+function renderAdminGrouped(){
+ const root=$('adminEntries');root.replaceChildren();
+ const chosen=$('adminSession').value;
+ const groups=new Map();
+ for(const item of adminRecords){
+   const code=sessions.find(x=>sessionIds[x[0]]!=null&&String(sessionIds[x[0]])===String(item.session_id))?.[0]||'other:'+item.session_id;
+   if(chosen!=='all'&&code!==chosen)continue;
+   if(!groups.has(code))groups.set(code,new Map());
+   const people=groups.get(code);
+   if(!people.has(item.author_id))people.set(item.author_id,[]);
+   people.get(item.author_id).push(item);
+ }
+ let shown=0;
+ const order=[...sessions.map(x=>x[0]),...groups.keys()].filter((v,i,a)=>a.indexOf(v)===i);
+ for(const code of order){
+   const people=groups.get(code);if(!people)continue;
+   const heading=document.createElement('h3');
+   const name=sessions.find(x=>x[0]===code)?.[1]||'其他場次';
+   const count=[...people.values()].reduce((sum,items)=>sum+items.length,0);shown+=count;
+   heading.textContent=name+'（'+count+' 筆）';root.append(heading);
+   let number=0;
+   for(const [author,items] of people){
+     const details=document.createElement('details');details.className='box';details.open=true;details.style.margin='10px 0';
+     const summary=document.createElement('summary');summary.style.cursor='pointer';summary.style.fontWeight='650';summary.textContent='同行者 '+(++number)+'（'+items.length+' 筆）';details.append(summary);
+     const identity=document.createElement('p');identity.className='muted';identity.textContent='識別碼：'+author;details.append(identity);
+     items.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+     for(const item of items){
+       const entry=document.createElement('div');entry.className='entry';
+       const date=document.createElement('small');date.textContent=new Date(item.created_at).toLocaleString('zh-TW');
+       const body=document.createElement('div');body.textContent=item.content;
+       entry.append(date,body);details.append(entry);
+     }
+     root.append(details);
+   }
+ }
+ if(!shown){const p=document.createElement('p');p.className='muted';p.textContent='目前沒有這個場次的書寫紀錄。';root.append(p)}
+ setStatus('adminStatus','目前顯示 '+shown+' 筆（已載入 '+adminRecords.length+' 筆，最多 200 筆）。');
+}
+async function loadAdminEntries(){
+ setStatus('adminStatus','正在讀取……');
+ const {data,error}=await db.from('walk_reflections').select('id,author_id,session_id,content,created_at').order('created_at',{ascending:false}).limit(200);
+ if(error){setStatus('adminStatus',error.message,true);return}
+ adminRecords=data||[];renderAdminGrouped();
+}
+$('adminSession').onchange=renderAdminGrouped;
+$('adminRefresh').onclick=loadAdminEntries;
 </script></body></html>
