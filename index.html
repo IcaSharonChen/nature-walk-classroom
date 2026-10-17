@@ -16,7 +16,7 @@
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const $=id=>document.getElementById(id);const cfg=window.WALK_CONFIG||{};const valid=cfg.url?.startsWith('https://')&&cfg.anonKey&&!cfg.anonKey.includes('REPLACE');let db=null,user=null,sessionIds={};const setStatus=(id,message,error=false)=>{const el=$(id);el.textContent=message;el.classList.toggle('error',error)};
 if(!valid){$('setup').classList.remove('hide');$('login').classList.add('hide')}else{db=createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});db.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>syncUser(session?.user||null))});db.auth.getSession().then(({data:{session}})=>syncUser(session?.user||null)).catch(e=>console.error(e))}
-async function syncUser(next){user=next;$('login').classList.toggle('hide',!!user);$('app').classList.toggle('hide',!user);if(!user)return;$('account').textContent=user.email||'已登入';await loadSessionIds();await Promise.all([loadEntries(),loadAdmin(),loadMyName()])
+async function syncUser(next){user=next;$('login').classList.toggle('hide',!!user);$('app').classList.toggle('hide',!user);if(!user)return;$('account').textContent=user.email||'已登入';await loadSessionIds();await Promise.all([loadEntries(),loadAdmin(),loadMyName()])}
   async function loadMyName(){
   if(!user)return;
   const {data,error}=await db.from('participants').select('display_name').eq('id',user.id).maybeSingle();
