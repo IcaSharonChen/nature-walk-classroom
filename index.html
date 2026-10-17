@@ -96,6 +96,11 @@ async function loadAdminEntries(){
  if(error){setStatus('adminStatus',error.message,true);return}
  adminRecords=data||[];
  participantNames=new Map();
+  participantEmails=new Map();
+const {data:emails,error:emailError}=await db.rpc('walk_admin_email_map');
+if(!emailError){
+  for(const item of emails||[])participantEmails.set(item.person_id,item.login_email);
+}
  const {data:profiles,error:profileError}=await db.from('participants').select('id,display_name').limit(1000);
  if(!profileError){for(const profile of profiles||[]){const name=String(profile.display_name||'').trim();if(name)participantNames.set(profile.id,name)}}
  renderAdminGrouped();
